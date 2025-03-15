@@ -9,8 +9,8 @@ from telegram import Bot
 
 #год публикации, время и количество дней для постинга
 YEAR = 2025
-FIVEBOOK_HOUR = 22
-REFLECTION_HOUR = 22
+FIVEBOOK_HOUR = 9
+REFLECTION_HOUR = 18
 DAY = 10
 
 #получаем токены из переменных окружения
