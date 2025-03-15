@@ -11,16 +11,14 @@ from telegram import Bot
 YEAR = 2025
 FIVEBOOK_HOUR = 9
 REFLECTION_HOUR = 18
-DAY = 10
+DAY = 291
 
 #получаем токены из переменных окружения
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 if not TOKEN:
-    raise ValueError("⛔️ Токен не найден! Проверь, добавлен ли он в секреты.")
-else:
-    print("✅ Токен успешно загружен!")
+    raise ValueError("Токен отсутствует! Добавь его в секреты репозитория.")
 
 #загружаем таблицы из Google Sheets
 fivebook = pd.read_csv("https://docs.google.com/spreadsheets/d/1bg-5nIYub5Ydo2S6tR9eQgGwKSAszzh9WPF6EEBt6nY/gviz/tq?tqx=out:csv&gid=301691926")
@@ -50,14 +48,10 @@ async def send_scheduled_messages(days):
     for _, row in all_posts.iterrows():
         post_time = row["date"]
         delay = (post_time - datetime.now()).total_seconds()
-
         if delay > 0:
-            print(f"Ждём {delay:.2f} секунд до публикации.")
-            await asyncio.sleep(delay)
-
+            await asyncio.sleep(min(delay, 86400))
         message = f"{escape_markdown(row['hashtag'])}\n\n*{escape_markdown(row['question'])}*"
         await bot.send_message(chat_id=CHAT_ID, text=message, parse_mode="MarkdownV2")
-        print("✅ Пост опубликован!")
 
 #запускаем задачу на публикацию сообщений на N дней вперёд
 if __name__ == "__main__":
