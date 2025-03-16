@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 import pandas as pd
 import re
 import os
@@ -15,11 +13,13 @@ logging.basicConfig(
     level=logging.INFO,
     handlers=[
         logging.FileHandler("bot.log"),
-        logging.StreamHandler()])
+        logging.StreamHandler()
+    ]
+)
 
 # Год публикации и время
 YEAR = 2025
-FIVEBOOK_HOUR = 13
+FIVEBOOK_HOUR = 14
 REFLECTION_HOUR = 19
 MAX_ATTEMPTS = 4  # 1 основная + 3 попытки со сдвигом
 
@@ -35,32 +35,39 @@ fivebook = pd.read_csv("https://docs.google.com/spreadsheets/d/1bg-5nIYub5Ydo2S6
 reflection = pd.read_csv("https://docs.google.com/spreadsheets/d/1bg-5nIYub5Ydo2S6tR9eQgGwKSAszzh9WPF6EEBt6nY/gviz/tq?tqx=out:csv&gid=315900274")
 
 # Приводим даты к нужному формату
-fivebook["date"] = pd.to_datetime(fivebook["date"], format="%d.%m.%Y").apply(lambda x: x.replace(year=YEAR, hour=FIVEBOOK_HOUR))
-reflection["date"] = pd.to_datetime(reflection["date"], format="%d.%m.%Y").apply(lambda x: x.replace(year=YEAR, hour=REFLECTION_HOUR))
+fivebook["date"] = pd.to_datetime(fivebook["date"], format="%d.%m.%Y")
+reflection["date"] = pd.to_datetime(reflection["date"], format="%d.%m.%Y")
+
+# Обновляем год и добавляем время
+fivebook["date"] = fivebook["date"].apply(lambda x: x.replace(year=YEAR, hour=FIVEBOOK_HOUR))
+reflection["date"] = reflection["date"].apply(lambda x: x.replace(year=YEAR, hour=REFLECTION_HOUR))
 
 def escape_markdown(text):
     """Экранируем специальные символы Markdown V2"""
     escape_chars = r'_*\\[\]()~>#+-=|{}.!'
-    return re.sub(f"([{re.escape(escape_chars)}])", r"\\\1", text)
+    return re.sub(f"([{re.escape(escape_chars)}])", r"\\\\\1", text)
 
-def get_next_post(shift_minutes=0):
+def get_today_post(shift_minutes=0):
     """
-    Возвращает ближайший пост, который нужно опубликовать.
+    Возвращает пост за текущую дату (день и месяц), но с обновленным годом.
     Можно сдвинуть время проверки на shift_minutes вперед.
     """
     now = datetime.now() + timedelta(minutes=shift_minutes)
+    today_str = now.strftime("%d.%m")  # Строка в формате ДД.ММ для фильтрации
+
+    # Фильтруем посты только за сегодняшнее число
+    today_fivebook = fivebook[fivebook["date"].dt.strftime("%d.%m") == today_str]
+    today_reflection = reflection[reflection["date"].dt.strftime("%d.%m") == today_str]
+
+    # Объединяем и выбираем ближайший пост
+    today_posts = pd.concat([today_fivebook, today_reflection]).sort_values("date")
     
-    # Ищем посты, у которых время публикации <= сейчас
-    next_fivebook = fivebook[fivebook["date"] <= now].sort_values("date").head(1)
-    next_reflection = reflection[reflection["date"] <= now].sort_values("date").head(1)
-    
-    # Объединяем и выбираем самый поздний пост, но не позднее текущего времени
-    next_post = pd.concat([next_fivebook, next_reflection]).sort_values("date").tail(1)
-    
-    if not next_post.empty:
-        logging.info(f"Выбранный пост: {next_post[['date', 'hashtag', 'question']].to_string(index=False)}")
-        return next_post.iloc[0]
+    if not today_posts.empty:
+        selected_post = today_posts.iloc[0]
+        logging.info(f"Выбранный пост: {selected_post}")
+        return selected_post
     else:
+        logging.info(f"На {today_str} пост не найден.")
         return None
 
 async def send_message_async(bot, chat_id, text):
@@ -73,21 +80,17 @@ async def send_message_async(bot, chat_id, text):
         logging.error(f"Ошибка отправки: {e}")
         return False
 
-async def main():
+if __name__ == "__main__":
     bot = Bot(token=TOKEN)
+    
     for attempt in range(MAX_ATTEMPTS):
-        post = get_next_post(shift_minutes=attempt * 5)
-        
+        post = get_today_post(shift_minutes=attempt * 5)
+
         if post is not None:
             message = f"{escape_markdown(post['hashtag'])}\n\n*{escape_markdown(post['question'])}*"
-            success = await send_message_async(bot, CHAT_ID, message)
-            
-            if success:
-                break  # Если пост отправлен, прерываем цикл
+            asyncio.run(send_message_async(bot, CHAT_ID, message))
+            break  # Если пост отправлен, прерываем цикл
         else:
             logging.info(f"Попытка {attempt + 1}: пост не найден.")
-
+    
     logging.info("Бот завершил работу.")
-
-if __name__ == "__main__":
-    asyncio.run(main())
