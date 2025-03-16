@@ -2,7 +2,7 @@ name: Run Telegram Bot Daily
 
 on:
   schedule:
-    - cron: "55 10 * * *"   # Запуск перед публикацией в 11:00
+    - cron: "55 11 * * *"   # Запуск перед публикацией в 12:00
     - cron: "55 18 * * *"  # Запуск перед публикацией в 19:00
   workflow_dispatch:  
 
@@ -14,7 +14,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # ✅ Гарантирует, что подтянется актуальный код
+          fetch-depth: 0  # Гарантирует, что подтянется актуальный код
 
       - name: Set up Python
         uses: actions/setup-python@v4
