@@ -5,7 +5,8 @@ import re
 import os
 import logging
 from datetime import datetime, timedelta
-from telegram import Bot, TelegramError
+from telegram import Bot
+from telegram.error import TelegramError
 
 # Настройка логирования
 logging.basicConfig(
