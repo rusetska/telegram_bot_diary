@@ -4,6 +4,7 @@ import pandas as pd
 import re
 import os
 import logging
+import asyncio
 from datetime import datetime, timedelta
 from telegram import Bot
 from telegram.error import TelegramError
@@ -18,7 +19,7 @@ logging.basicConfig(
 
 # Год публикации и время
 YEAR = 2025
-FIVEBOOK_HOUR = 12
+FIVEBOOK_HOUR = 13
 REFLECTION_HOUR = 19
 MAX_ATTEMPTS = 4  # 1 основная + 3 попытки со сдвигом
 
@@ -39,7 +40,7 @@ reflection["date"] = pd.to_datetime(reflection["date"], format="%d.%m.%Y").apply
 
 def escape_markdown(text):
     """Экранируем специальные символы Markdown V2"""
-    escape_chars = r'_*\[\]()~>#+-=|{}.!'
+    escape_chars = r'_*\\[\]()~>#+-=|{}.!'
     return re.sub(f"([{re.escape(escape_chars)}])", r"\\\1", text)
 
 def get_next_post(shift_minutes=0):
@@ -48,39 +49,45 @@ def get_next_post(shift_minutes=0):
     Можно сдвинуть время проверки на shift_minutes вперед.
     """
     now = datetime.now() + timedelta(minutes=shift_minutes)
-
+    
     # Ищем посты, у которых время публикации <= сейчас
     next_fivebook = fivebook[fivebook["date"] <= now].sort_values("date").head(1)
     next_reflection = reflection[reflection["date"] <= now].sort_values("date").head(1)
+    
+    # Объединяем и выбираем самый поздний пост, но не позднее текущего времени
+    next_post = pd.concat([next_fivebook, next_reflection]).sort_values("date").tail(1)
+    
+    if not next_post.empty:
+        logging.info(f"Выбранный пост: {next_post[['date', 'hashtag', 'question']].to_string(index=False)}")
+        return next_post.iloc[0]
+    else:
+        return None
 
-    # Объединяем и выбираем самый ранний
-    next_post = pd.concat([next_fivebook, next_reflection]).sort_values("date").head(1)
-
-    return next_post.iloc[0] if not next_post.empty else None
-
-def send_message(bot, chat_id, text):
-    """Отправляет сообщение в Telegram"""
+async def send_message_async(bot, chat_id, text):
+    """Асинхронная отправка сообщения"""
     try:
-        bot.send_message(chat_id=chat_id, text=text, parse_mode="MarkdownV2")
+        await bot.send_message(chat_id=chat_id, text=text, parse_mode="MarkdownV2")
         logging.info(f"Успешно отправлено: {text[:50]}...")
         return True
     except TelegramError as e:
         logging.error(f"Ошибка отправки: {e}")
         return False
 
-if __name__ == "__main__":
+async def main():
     bot = Bot(token=TOKEN)
-
     for attempt in range(MAX_ATTEMPTS):
         post = get_next_post(shift_minutes=attempt * 5)
-
+        
         if post is not None:
             message = f"{escape_markdown(post['hashtag'])}\n\n*{escape_markdown(post['question'])}*"
-            success = send_message(bot, CHAT_ID, message)
-
+            success = await send_message_async(bot, CHAT_ID, message)
+            
             if success:
                 break  # Если пост отправлен, прерываем цикл
         else:
             logging.info(f"Попытка {attempt + 1}: пост не найден.")
 
     logging.info("Бот завершил работу.")
+
+if __name__ == "__main__":
+    asyncio.run(main())
