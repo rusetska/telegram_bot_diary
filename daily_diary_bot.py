@@ -9,7 +9,7 @@ from telegram import Bot
 
 #год публикации, время и количество дней для постинга
 YEAR = 2025
-FIVEBOOK_HOUR = 9
+FIVEBOOK_HOUR = 10
 REFLECTION_HOUR = 18
 DAY = 291
 
