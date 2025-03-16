@@ -17,7 +17,7 @@ logging.basicConfig(
 
 # Год публикации и время
 YEAR = 2025
-FIVEBOOK_HOUR = 10
+FIVEBOOK_HOUR = 11
 REFLECTION_HOUR = 18
 MAX_ATTEMPTS = 4  # 1 основная + 3 попытки со сдвигом
 
