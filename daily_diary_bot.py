@@ -46,8 +46,10 @@ reflection["date"] = reflection["date"].apply(lambda x: x.replace(year=YEAR, hou
 
 def escape_markdown(text):
     """Экранируем специальные символы Markdown V2"""
-    escape_chars = r'_*\\[\]()~>#+-=|{}.!'
-    return re.sub(f"([{re.escape(escape_chars)}])", r"\\\\\1", text)
+    escape_chars = r'_*[\]()~`>+=|{}.!'
+    text = re.sub(f"([{re.escape(escape_chars)}])", r"\\\1", text)  
+    text = text.replace("#", "\#") 
+    return text
 
 def get_today_post(shift_minutes=0):
     """
