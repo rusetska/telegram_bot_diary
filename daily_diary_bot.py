@@ -2,57 +2,84 @@
 
 import pandas as pd
 import re
-import asyncio
 import os
+import logging
 from datetime import datetime, timedelta
-from telegram import Bot
+from telegram import Bot, TelegramError
 
-#год публикации, время и количество дней для постинга
+# Настройка логирования
+logging.basicConfig(
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
+    handlers=[
+        logging.FileHandler("bot.log"),
+        logging.StreamHandler()])
+
+# Год публикации и время
 YEAR = 2025
 FIVEBOOK_HOUR = 10
 REFLECTION_HOUR = 18
-DAY = 291
+MAX_ATTEMPTS = 4  # 1 основная + 3 попытки со сдвигом
 
-#получаем токены из переменных окружения
+# Получаем токены из переменных окружения
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 if not TOKEN:
     raise ValueError("Токен отсутствует! Добавь его в секреты репозитория.")
 
-#загружаем таблицы из Google Sheets
+# Загружаем таблицы из Google Sheets
 fivebook = pd.read_csv("https://docs.google.com/spreadsheets/d/1bg-5nIYub5Ydo2S6tR9eQgGwKSAszzh9WPF6EEBt6nY/gviz/tq?tqx=out:csv&gid=301691926")
 reflection = pd.read_csv("https://docs.google.com/spreadsheets/d/1bg-5nIYub5Ydo2S6tR9eQgGwKSAszzh9WPF6EEBt6nY/gviz/tq?tqx=out:csv&gid=315900274")
 
-#приводим даты к нужному формату
+# Приводим даты к нужному формату
 fivebook["date"] = pd.to_datetime(fivebook["date"], format="%d.%m.%Y").apply(lambda x: x.replace(year=YEAR, hour=FIVEBOOK_HOUR))
 reflection["date"] = pd.to_datetime(reflection["date"], format="%d.%m.%Y").apply(lambda x: x.replace(year=YEAR, hour=REFLECTION_HOUR))
 
 def escape_markdown(text):
-    """экранируем специальные символы Markdown V2"""
+    """Экранируем специальные символы Markdown V2"""
     escape_chars = r'_*\[\]()~>#+-=|{}.!'
     return re.sub(f"([{re.escape(escape_chars)}])", r"\\\1", text)
 
-async def send_scheduled_messages(days):
-    """отправляем сообщения по расписанию"""
-    bot = Bot(token=TOKEN)
-    
-    #отбираем посты за указанное количество дней
-    now = datetime.now()
-    fivebook_posts = fivebook[(fivebook["date"] >= now) & (fivebook["date"] < now + timedelta(days=days))]
-    reflection_posts = reflection[(reflection["date"] >= now) & (reflection["date"] < now + timedelta(days=days))]
+def get_next_post(shift_minutes=0):
+    """
+    Возвращает ближайший пост, который нужно опубликовать.
+    Можно сдвинуть время проверки на shift_minutes вперед.
+    """
+    now = datetime.now() + timedelta(minutes=shift_minutes)
 
-    #объединяем все посты в один список и сортируем по времени
-    all_posts = pd.concat([fivebook_posts, reflection_posts]).sort_values(by="date")
+    # Ищем посты, у которых время публикации <= сейчас
+    next_fivebook = fivebook[fivebook["date"] <= now].sort_values("date").head(1)
+    next_reflection = reflection[reflection["date"] <= now].sort_values("date").head(1)
 
-    for _, row in all_posts.iterrows():
-        post_time = row["date"]
-        delay = (post_time - datetime.now()).total_seconds()
-        if delay > 0:
-            await asyncio.sleep(min(delay, 86400))
-        message = f"{escape_markdown(row['hashtag'])}\n\n*{escape_markdown(row['question'])}*"
-        await bot.send_message(chat_id=CHAT_ID, text=message, parse_mode="MarkdownV2")
+    # Объединяем и выбираем самый ранний
+    next_post = pd.concat([next_fivebook, next_reflection]).sort_values("date").head(1)
 
-#запускаем задачу на публикацию сообщений на N дней вперёд
+    return next_post.iloc[0] if not next_post.empty else None
+
+def send_message(bot, chat_id, text):
+    """Отправляет сообщение в Telegram"""
+    try:
+        bot.send_message(chat_id=chat_id, text=text, parse_mode="MarkdownV2")
+        logging.info(f"Успешно отправлено: {text[:50]}...")
+        return True
+    except TelegramError as e:
+        logging.error(f"Ошибка отправки: {e}")
+        return False
+
 if __name__ == "__main__":
-    asyncio.run(send_scheduled_messages(DAY))
+    bot = Bot(token=TOKEN)
+
+    for attempt in range(MAX_ATTEMPTS):
+        post = get_next_post(shift_minutes=attempt * 5)
+
+        if post is not None:
+            message = f"{escape_markdown(post['hashtag'])}\n\n*{escape_markdown(post['question'])}*"
+            success = send_message(bot, CHAT_ID, message)
+
+            if success:
+                break  # Если пост отправлен, прерываем цикл
+        else:
+            logging.info(f"Попытка {attempt + 1}: пост не найден.")
+
+    logging.info("Бот завершил работу.")
