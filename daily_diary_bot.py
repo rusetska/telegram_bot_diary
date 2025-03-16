@@ -15,12 +15,9 @@ logging.basicConfig(
     level=logging.INFO,
     handlers=[
         logging.FileHandler("bot.log"),
-        logging.StreamHandler()
-    ]
-)
+        logging.StreamHandler()])
 
-# Год публикации и время
-YEAR = 2025
+# Время публикаций и количество попыток до отключения бота
 FIVEBOOK_HOUR = 14
 REFLECTION_HOUR = 19
 MAX_ATTEMPTS = 4  # 1 основная + 3 попытки со сдвигом
@@ -41,8 +38,8 @@ fivebook["date"] = pd.to_datetime(fivebook["date"], format="%d.%m.%Y")
 reflection["date"] = pd.to_datetime(reflection["date"], format="%d.%m.%Y")
 
 # Обновляем год и добавляем время
-fivebook["date"] = fivebook["date"].apply(lambda x: x.replace(year=YEAR, hour=FIVEBOOK_HOUR))
-reflection["date"] = reflection["date"].apply(lambda x: x.replace(year=YEAR, hour=REFLECTION_HOUR))
+fivebook["date"] = fivebook["date"].apply(lambda x: x.replace(year=datetime.now().year, hour=FIVEBOOK_HOUR))
+reflection["date"] = reflection["date"].apply(lambda x: x.replace(year=datetime.now().year, hour=REFLECTION_HOUR))
 
 def escape_markdown(text):
     """Экранируем специальные символы Markdown V2"""
@@ -52,26 +49,35 @@ def escape_markdown(text):
     return text
 
 def get_today_post(shift_minutes=0):
-    """
-    Возвращает пост за текущую дату (день и месяц), но с обновленным годом.
-    Можно сдвинуть время проверки на shift_minutes вперед.
-    """
+    """Возвращает ближайший пост за текущую дату и время, с учетом сдвига shift_minutes"""
     now = datetime.now() + timedelta(minutes=shift_minutes)
-    today_str = now.strftime("%d.%m")  # Строка в формате ДД.ММ для фильтрации
+    today_str = now.strftime("%d.%m")  # Формат ДД.ММ для поиска
+    current_time = now.strftime("%H:%M")  # Формат ЧЧ:ММ для сравнения времени
 
-    # Фильтруем посты только за сегодняшнее число
+    # Фильтруем посты по текущей дате (игнорируем год)
     today_fivebook = fivebook[fivebook["date"].dt.strftime("%d.%m") == today_str]
     today_reflection = reflection[reflection["date"].dt.strftime("%d.%m") == today_str]
 
-    # Объединяем и выбираем ближайший пост
-    today_posts = pd.concat([today_fivebook, today_reflection]).sort_values("date")
-    
-    if not today_posts.empty:
-        selected_post = today_posts.iloc[0]
+    # Объединяем посты
+    today_posts = pd.concat([today_fivebook, today_reflection])
+
+    if today_posts.empty:
+        logging.info(f"На {today_str} пост не найден.")
+        return None
+
+    # Преобразуем время в datetime, чтобы удобно сравнивать
+    today_posts["time"] = today_posts["date"].dt.strftime("%H:%M")
+
+    # Оставляем только посты, которые еще не отправлены
+    future_posts = today_posts[today_posts["time"] >= current_time]
+
+    if not future_posts.empty:
+        # Берём ближайший по времени
+        selected_post = future_posts.sort_values("time").iloc[0]
         logging.info(f"Выбранный пост: {selected_post}")
         return selected_post
     else:
-        logging.info(f"На {today_str} пост не найден.")
+        logging.info(f"На {today_str} все посты уже отправлены.")
         return None
 
 async def send_message_async(bot, chat_id, text):
