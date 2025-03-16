@@ -2,7 +2,7 @@ name: Run Telegram Bot Daily
 
 on:
   schedule:
-    - cron: "55 11 * * *"   # Запуск перед публикацией в 12:00
+    - cron: "55 12 * * *"   # Запуск перед публикацией в 13:00
     - cron: "55 18 * * *"  # Запуск перед публикацией в 19:00
   workflow_dispatch:  
 
