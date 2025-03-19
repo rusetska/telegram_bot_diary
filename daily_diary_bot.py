@@ -18,7 +18,7 @@ logging.basicConfig(
         logging.StreamHandler()])
 
 # Время публикаций и количество попыток до отключения бота
-FIVEBOOK_HOUR = 6
+FIVEBOOK_HOUR = 10
 REFLECTION_HOUR = 19
 MAX_ATTEMPTS = 4  # 1 основная + 3 попытки со сдвигом
 
