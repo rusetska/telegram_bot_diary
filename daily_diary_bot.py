@@ -27,7 +27,7 @@ TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 if not TOKEN:
-    raise ValueError("Токен отсутствует! Добавь его в секреты репозитория.")
+    raise ValueError("Токен отсутствует! Добавь его в секреты репозитория")
 
 # Загружаем таблицы из Google Sheets
 fivebook = pd.read_csv("https://docs.google.com/spreadsheets/d/1bg-5nIYub5Ydo2S6tR9eQgGwKSAszzh9WPF6EEBt6nY/gviz/tq?tqx=out:csv&gid=301691926")
