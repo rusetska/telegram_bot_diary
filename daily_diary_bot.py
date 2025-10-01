@@ -19,7 +19,7 @@ logging.basicConfig(
 
 # Время публикаций и количество попыток до отключения бота
 FIVEBOOK_HOUR = 10
-REFLECTION_HOUR = 19
+REFLECTION_HOUR = 18
 MAX_ATTEMPTS = 4  # 1 основная + 3 попытки со сдвигом
 
 # Получаем токены из переменных окружения
