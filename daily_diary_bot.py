@@ -30,8 +30,19 @@ if not TOKEN:
     raise ValueError("Токен отсутствует! Добавь его в секреты репозитория")
 
 # Загружаем таблицы из Google Sheets
-fivebook = pd.read_csv("https://docs.google.com/spreadsheets/d/1bg-5nIYub5Ydo2S6tR9eQgGwKSAszzh9WPF6EEBt6nY/gviz/tq?tqx=out:csv&gid=301691926")
-reflection = pd.read_csv("https://docs.google.com/spreadsheets/d/1bg-5nIYub5Ydo2S6tR9eQgGwKSAszzh9WPF6EEBt6nY/gviz/tq?tqx=out:csv&gid=315900274")
+def load_data():
+    try:
+        fivebook = pd.read_csv("https://docs.google.com/spreadsheets/d/1bg-5nIYub5Ydo2S6tR9eQgGwKSAszzh9WPF6EEBt6nY/gviz/tq?tqx=out:csv&gid=301691926")
+        reflection = pd.read_csv("https://docs.google.com/spreadsheets/d/1bg-5nIYub5Ydo2S6tR9eQgGwKSAszzh9WPF6EEBt6nY/gviz/tq?tqx=out:csv&gid=315900274")
+        return fivebook, reflection
+    except Exception as e:
+        logging.error(f"Ошибка загрузки данных: {e}")
+        return None, None
+
+fivebook, reflection = load_data()
+if fivebook is None or reflection is None:
+    logging.error("Не удалось загрузить данные, завершение работы бота.")
+    exit(1)
 
 # Приводим даты к нужному формату
 fivebook["date"] = pd.to_datetime(fivebook["date"], format="%d.%m.%Y")
@@ -90,7 +101,7 @@ async def send_message_async(bot, chat_id, text):
         logging.error(f"Ошибка отправки: {e}")
         return False
 
-if __name__ == "__main__":
+async def main():
     bot = Bot(token=TOKEN)
     
     for attempt in range(MAX_ATTEMPTS):
@@ -98,9 +109,14 @@ if __name__ == "__main__":
 
         if post is not None:
             message = f"{escape_markdown(post['hashtag'])}\n\n*{escape_markdown(post['question'])}*"
-            asyncio.run(send_message_async(bot, CHAT_ID, message))
-            break  # Если пост отправлен, прерываем цикл
+            success = await send_message_async(bot, CHAT_ID, message)
+            if success:
+                break  # Если пост отправлен успешно, прерываем цикл
         else:
             logging.info(f"Попытка {attempt + 1}: пост не найден.")
     
     logging.info("Бот завершил работу.")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+
